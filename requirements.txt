@@ -1,0 +1,9 @@
+fastapi
+sqlalchemy
+requests
+icecream
+httpx
+slowapi
+python-dotenv
+pyjwt
+uvicorn
