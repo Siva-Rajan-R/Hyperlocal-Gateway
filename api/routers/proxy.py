@@ -8,7 +8,7 @@ router = APIRouter()
 
 @router.api_route(
     "/{service_path:path}",
-    methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+    methods=["GET","POST","PUT","DELETE","PATCH","OPTIONS","HEAD"],
 )
 
 @limiter.limit("15/minute")
