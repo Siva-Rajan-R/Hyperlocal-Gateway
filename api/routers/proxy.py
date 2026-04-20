@@ -10,21 +10,24 @@ router = APIRouter()
     "/{service_path:path}",
     methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
 )
-@limiter.limit("10/minute")
-async def proxy(
-    service_path: str,
-    request: Request,
-):
-    base_url = get_service_url(service_path=service_path)
 
+@limiter.limit("15/minute")
+async def proxy(service_path: str, request: Request):
+    base_url = get_service_url(service_path=service_path)
     url = f"{base_url}/{service_path}"
-    ic(url)
+
+    excluded_headers = {"host", "content-length", "connection"}
+
+    headers = {
+        k: v for k, v in request.headers.items()
+        if k.lower() not in excluded_headers
+    }
 
     async with httpx.AsyncClient() as client:
         resp = await client.request(
             method=request.method,
             url=url,
-            headers=dict(request.headers),
+            headers=headers,
             params=request.query_params,
             content=await request.body()
         )
