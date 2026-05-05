@@ -23,7 +23,7 @@ async def proxy(service_path: str, request: Request):
         if k.lower() not in excluded_headers
     }
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.request(
             method=request.method,
             url=url,
