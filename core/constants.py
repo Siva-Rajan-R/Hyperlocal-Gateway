@@ -1,7 +1,7 @@
 SERVICES={
     'utilities':'http://127.0.0.1:8000',
     'shops':'http://127.0.0.1:8001',
-    'auth':'http://127.0.0.1:8001',
+    'auth':'http://127.0.0.1:8010',
     'employees':'http://127.0.0.1:8001',
     'suppliers':'http://127.0.0.1:8002',
     "purchases": 'http://127.0.0.1:8003',
@@ -12,5 +12,7 @@ SERVICES={
     'analytics':'http://127.0.0.1:8008',
     'cart':'http://127.0.0.1:8007',
     'analytics-dashboard':'http://127.0.0.1:8008',
-    'returns':'http://127.0.0.1:8007'
+    'returns':'http://127.0.0.1:8007',
+    'digitalstore':'http://127.0.0.1:8011',
+    'notifications':'http://127.0.0.1:8009'
 }
