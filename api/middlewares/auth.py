@@ -6,6 +6,21 @@ import json
 from motor.motor_asyncio import AsyncIOMotorClient
 from icecream import ic
 
+def create_error_response(status_code: int, msg: str, description: str):
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "detail": {
+                "msg": msg,
+                "status_code": status_code,
+                "success": False,
+                "status_type": "error",
+                "title": msg,
+                "description": description
+            }
+        }
+    )
+
 # In-memory public key cache: version -> public_key_pem
 PUBLIC_KEYS_CACHE = {}
 
@@ -29,10 +44,7 @@ async def auth_middleware(request: Request, call_next):
 
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
-        return JSONResponse(
-            status_code=401,
-            content={"detail": "Missing or invalid authorization header"}
-        )
+        return create_error_response(401, "Authentication Error", "Missing or invalid authorization header")
 
     token = auth_header.replace("Bearer ", "")
 
@@ -43,10 +55,7 @@ async def auth_middleware(request: Request, call_next):
         jti = unverified_payload.get("jti")
     except Exception as e:
         ic(f"Unverified decode failed: {e}")
-        return JSONResponse(
-            status_code=401,
-            content={"detail": "Invalid token format"}
-        )
+        return create_error_response(401, "Authentication Error", "Invalid token format")
 
     # 2. Get public key for version (with in-memory cache)
     global PUBLIC_KEYS_CACHE
@@ -55,65 +64,79 @@ async def auth_middleware(request: Request, call_next):
             async with httpx.AsyncClient(timeout=5.0) as client:
                 resp = await client.get(f"{AUTH_SERVICE_URL}/auth/keys/{version}")
                 if resp.status_code == 200:
-                    PUBLIC_KEYS_CACHE[version] = resp.json()["public_key"]
+                    raw_key = resp.json()["public_key"]
+                    if isinstance(raw_key, str):
+                        raw_key = "\n".join(line.strip() for line in raw_key.strip().splitlines())
+                    PUBLIC_KEYS_CACHE[version] = raw_key
                 else:
-                    return JSONResponse(
-                        status_code=401,
-                        content={"detail": f"Failed to fetch public key for version {version}"}
-                    )
+                    return create_error_response(401, "Authentication Error", f"Failed to fetch public key for version {version}")
         except Exception as e:
             ic(f"Error fetching public key: {e}")
-            return JSONResponse(
-                status_code=500,
-                content={"detail": "Authentication Service is currently unavailable"}
-            )
+            return create_error_response(500, "Authentication Error", "Authentication Service is currently unavailable")
 
     public_key = PUBLIC_KEYS_CACHE[version]
 
     # 3. Verify signature and expiration
     try:
-        payload = jwt.decode(token, public_key, algorithms=["RS256"])
+        payload = jwt.decode(token, public_key, algorithms=["RS256", "HS256"])
     except jwt.ExpiredSignatureError:
-        return JSONResponse(status_code=401, content={"detail": "Token has expired"})
+        return create_error_response(401, "Authentication Error", "Token has expired")
     except jwt.PyJWTError as e:
         ic(f"Token verification failed: {e}")
-        return JSONResponse(status_code=401, content={"detail": "Invalid token signature"})
+        # Invalidate cached public key in case auth service updated key pair
+        PUBLIC_KEYS_CACHE.pop(version, None)
+        return create_error_response(401, "Authentication Error", "Invalid token signature")
 
     # 4. Check if token was revoked
     if jti:
         try:
             is_revoked = await db.revoked_tokens.find_one({"jti": jti})
             if is_revoked:
-                return JSONResponse(status_code=401, content={"detail": "Token has been revoked"})
+                return create_error_response(401, "Authentication Error", "Token has been revoked")
         except Exception as e:
             ic(f"Failed to check token revocation: {e}")
             # We fail secure on DB errors
-            return JSONResponse(status_code=500, content={"detail": "Internal authorization database error"})
+            return create_error_response(500, "Authentication Error", "Internal authorization database error")
 
     # 5. Service-based Route Access Control (Navigation Rules)
     service_name = payload.get("service_name")
+    user_id = payload.get("sub")
     
-    # if service_name == "HYPERLOCAL-INVENTORY":
-    #     # HYPERLOCAL-INVENTORY cannot access /api/digitalstore
-    #     if path.startswith("/api/digitalstore") or path.startswith("/digitalstore"):
-    #         return JSONResponse(
-    #             status_code=403,
-    #             content={"detail": "Access forbidden: HYPERLOCAL-INVENTORY cannot access digital store routes"}
-    #         )
-    # elif service_name == "HYPERLOCAL-APP":
-    #     # HYPERLOCAL-APP can only access /api/digitalstore
-    #     if not (path.startswith("/api/digitalstore") or path.startswith("/digitalstore")):
-    #         return JSONResponse(
-    #             status_code=403,
-    #             content={"detail": "Access forbidden: HYPERLOCAL-APP can only access digital store routes"}
-    #         )
+    # Extract x-shop-id to verify roles
+    x_shop_id = request.headers.get("x-shop-id")
+    
+    from core.permissions.route_permissions import get_required_permission, ROLE_PERMISSIONS
+    required_permission = get_required_permission(request.method, path)
+    
+    role = payload.get("role")
+    
+    if x_shop_id and user_id:
+        # We need to check the shop-specific role from ShopEmp-Service
+        SHOPEMP_SERVICE_URL = "http://127.0.0.1:8001"
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(f"{SHOPEMP_SERVICE_URL}/employees/internal/role/{x_shop_id}/{user_id}")
+                if resp.status_code == 200:
+                    role = resp.json().get("role")
+        except Exception as e:
+            ic(f"Failed to fetch role from ShopEmp-Service: {e}")
+            
+        if not role:
+            return create_error_response(403, "Access Denied", "Access denied: Not an authorized employee of this shop")
+            
+    if required_permission:
+        if not role:
+            return create_error_response(403, "Access Denied", "Access denied: Role could not be determined")
+        allowed_actions = ROLE_PERMISSIONS.get(role, set())
+        if required_permission not in allowed_actions:
+            return create_error_response(403, "Access Denied", f"Access denied: Role '{role}' does not have '{required_permission}' permission")
 
     # 6. Forward Decoded Token User Info as JSON in X-USER-INFOS header
     user_info = {
-        "user_id": payload.get("sub"),
+        "user_id": user_id,
         "email": payload.get("email"),
         "mobilenumber": payload.get("mobilenumber"),
-        "role": payload.get("role"),
+        "role": role,
         "service_name": service_name
     }
     user_info_json = json.dumps(user_info)

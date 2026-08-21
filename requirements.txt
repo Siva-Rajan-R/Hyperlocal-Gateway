@@ -5,5 +5,7 @@ icecream
 httpx
 slowapi
 python-dotenv
-pyjwt
+pyjwt[crypto]
+cryptography
 uvicorn
+motor
