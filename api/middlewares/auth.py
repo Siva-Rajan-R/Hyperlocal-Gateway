@@ -1,10 +1,13 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
-import jwt
+import jwt,os
 import httpx
 import json
 from motor.motor_asyncio import AsyncIOMotorClient
 from icecream import ic
+from core.constants import SHOPEMP_SERVICE_URL,AUTH_SERVICE_URL
+from dotenv import load_dotenv
+load_dotenv()
 
 def create_error_response(status_code: int, msg: str, description: str):
     return JSONResponse(
@@ -25,10 +28,10 @@ def create_error_response(status_code: int, msg: str, description: str):
 PUBLIC_KEYS_CACHE = {}
 
 # MongoDB Client for checking token revocation
-mongo_client = AsyncIOMotorClient("mongodb://localhost:27017")
+MONGODB_URL=os.getenv("MONGODB_URL")
+mongo_client = AsyncIOMotorClient(MONGODB_URL)
 db = mongo_client["AuthenticationServiceDb"]
 
-AUTH_SERVICE_URL="http://127.0.0.1:8010"
 
 async def auth_middleware(request: Request, call_next):
     path = request.url.path
@@ -112,7 +115,6 @@ async def auth_middleware(request: Request, call_next):
     
     if x_shop_id and user_id:
         # We need to check the shop-specific role from ShopEmp-Service
-        SHOPEMP_SERVICE_URL = "http://127.0.0.1:8001"
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 resp = await client.get(f"{SHOPEMP_SERVICE_URL}/employees/internal/role/{x_shop_id}/{user_id}")
@@ -124,12 +126,27 @@ async def auth_middleware(request: Request, call_next):
         if not role:
             return create_error_response(403, "Access Denied", "Access denied: Not an authorized employee of this shop")
             
+    # Logging with color formatting
+    import logging
+    logger = logging.getLogger("gateway.auth")
+
+    CYAN = "\033[96m"
+    GREEN = "\033[92m"
+    RED = "\033[91m"
+    YELLOW = "\033[93m"
+    RESET = "\033[0m"
+
     if required_permission:
         if not role:
+            logger.warning(f"{RED}[AUTH] ✖ ACCESS DENIED:{RESET} {CYAN}{request.method} {path}{RESET} | User: {user_id} | Role: {YELLOW}NONE{RESET} | Required Permission: {required_permission}")
             return create_error_response(403, "Access Denied", "Access denied: Role could not be determined")
         allowed_actions = ROLE_PERMISSIONS.get(role, set())
         if required_permission not in allowed_actions:
+            logger.warning(f"{RED}[AUTH] ✖ ACCESS DENIED:{RESET} {CYAN}{request.method} {path}{RESET} | User: {user_id} | Role: {YELLOW}{role}{RESET} | Missing Permission: {required_permission}")
             return create_error_response(403, "Access Denied", f"Access denied: Role '{role}' does not have '{required_permission}' permission")
+        logger.info(f"{GREEN}[AUTH] ✔ ACCESS ALLOWED:{RESET} {CYAN}{request.method} {path}{RESET} | User: {user_id} | Role: {YELLOW}{role}{RESET} | Granted Permission: {required_permission}")
+    else:
+        logger.info(f"{GREEN}[AUTH] ✔ ACCESS ALLOWED (Unrestricted Route):{RESET} {CYAN}{request.method} {path}{RESET} | User: {user_id} | Role: {YELLOW}{role or 'PUBLIC'}{RESET}")
 
     # 6. Forward Decoded Token User Info as JSON in X-USER-INFOS header
     user_info = {

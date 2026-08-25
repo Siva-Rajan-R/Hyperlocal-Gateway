@@ -36,3 +36,13 @@ SERVICES = {
     'digitalstore': 'http://digitalstore-user-service:8000',
     'notifications': 'http://notification-service:8000',
 }
+
+
+AUTH_SERVICE_URL="http://authentication-service:8000"
+
+SHOPEMP_SERVICE_URL="http://shopemp-service:8000"
+
+
+# AUTH_SERVICE_URL="http://127.0.0.1:8010"
+
+# SHOPEMP_SERVICE_URL="http://127.0.0.1:8001"
