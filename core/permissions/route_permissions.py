@@ -90,9 +90,19 @@ ROLE_PERMISSIONS = {
         "read_all", "create_billing", "create_order", "update_order", "read_order",
         "create_customer", "update_customer", "read_customer", "read_product"
     },
+    "USER": {
+        "create_order", "read_order", "read_product", "read_customer"
+    },
+    "CUSTOMER": {
+        "create_order", "read_order", "read_product", "read_customer"
+    },
 }
 
 def get_required_permission(method: str, path: str):
+    # Exclude digital store routes from employee/admin permission enforcement
+    if path.startswith("/api/digitalstore") or path.startswith("/digitalstore"):
+        return None
+        
     # Sort keys by length descending to match longest prefix first
     sorted_routes = sorted(ROUTE_PERMISSIONS.keys(), key=lambda k: len(k[1]), reverse=True)
     for route_method, route_path in sorted_routes:

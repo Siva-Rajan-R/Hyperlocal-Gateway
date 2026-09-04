@@ -113,7 +113,14 @@ async def auth_middleware(request: Request, call_next):
     
     role = payload.get("role")
     
-    if x_shop_id and user_id:
+    is_digitalstore_route = (
+        path.startswith("/api/digitalstore")
+        or path.startswith("/digitalstore")
+        or service_name == "digitalstore"
+        or request.headers.get("x-origin") == "digitalstore"
+    )
+    
+    if not is_digitalstore_route and x_shop_id and user_id:
         # We need to check the shop-specific role from ShopEmp-Service
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
@@ -136,7 +143,7 @@ async def auth_middleware(request: Request, call_next):
     YELLOW = "\033[93m"
     RESET = "\033[0m"
 
-    if required_permission:
+    if required_permission and not is_digitalstore_route:
         if not role:
             logger.warning(f"{RED}[AUTH] ✖ ACCESS DENIED:{RESET} {CYAN}{request.method} {path}{RESET} | User: {user_id} | Role: {YELLOW}NONE{RESET} | Required Permission: {required_permission}")
             return create_error_response(403, "Access Denied", "Access denied: Role could not be determined")
