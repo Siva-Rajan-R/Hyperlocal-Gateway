@@ -13,6 +13,7 @@
 #     'cart':'http://127.0.0.1:8007',
 #     'analytics-dashboard':'http://127.0.0.1:8008',
 #     'returns':'http://127.0.0.1:8007',
+#     'exchanges':'http://127.0.0.1:8007',
 #     'digitalstore':'http://127.0.0.1:8011',
 #     'notifications':'http://127.0.0.1:8009'
 # }
@@ -37,6 +38,7 @@ SERVICES = {
     'cart': 'http://order-service:8000',
     'analytics-dashboard': 'http://analytics-service:8000',
     'returns': 'http://order-service:8000',
+    'exchanges': 'http://order-service:8000',
     'digitalstore': 'http://digitalstore-user-service:8000',
     'notifications': 'http://notification-service:8000',
 }
