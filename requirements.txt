@@ -9,3 +9,4 @@ pyjwt[crypto]
 cryptography
 uvicorn
 motor
+uvicorn[standard]

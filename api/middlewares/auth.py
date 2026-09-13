@@ -65,10 +65,18 @@ async def auth_middleware(request: Request, call_next):
         return await call_next(request)
 
     auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        return create_error_response(401, "Authentication Error", "Missing or invalid authorization header")
+    token = None
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.replace("Bearer ", "").strip()
+    else:
+        token = (
+            request.query_params.get("token")
+            or request.query_params.get("auth_token")
+            or request.query_params.get("access_token")
+        )
 
-    token = auth_header.replace("Bearer ", "")
+    if not token:
+        return create_error_response(401, "Authentication Error", "Missing or invalid authorization header")
 
     try:
         # 1. Decode token without signature verification to extract version
