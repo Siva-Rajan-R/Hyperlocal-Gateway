@@ -44,13 +44,35 @@ PUBLIC_KEYS_CACHE = {}
 # In-memory TTL caches for roles and validated tokens
 USER_ROLE_CACHE = {}  # (shop_id, user_id) -> (role, expire_time)
 VALID_JTI_CACHE = {}  # jti -> expire_time
+SHOP_SUB_CACHE = {}   # shop_id -> (is_expired, expire_time)
 ROLE_CACHE_TTL = 60.0  # seconds
 JTI_CACHE_TTL = 60.0   # seconds
+SUB_CACHE_TTL = 10.0   # seconds
 
-# MongoDB Client for checking token revocation
-MONGODB_URL = os.getenv("MONGODB_URL")
+# MongoDB Client for checking token revocation & subscription
+MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
 mongo_client = AsyncIOMotorClient(MONGODB_URL)
 db = mongo_client["AuthenticationServiceDb"]
+
+
+async def is_shop_subscription_expired(shop_id: str) -> bool:
+    mock_expired = (os.getenv("MOCK_SUBSCRIPTION_EXPIRED", "false").lower() in ("true", "1", "yes")) or (os.getenv("MOCK_TRIAL_EXPIRED", "false").lower() in ("true", "1", "yes"))
+    if mock_expired:
+        return True
+    if not shop_id or shop_id == "string":
+        return False
+    now = time.time()
+    cached = SHOP_SUB_CACHE.get(shop_id)
+    if cached and now < cached[1]:
+        return cached[0]
+    try:
+        sub_doc = await mongo_client["ShopEmpServiceDb"]["shop_subscriptions"].find_one({"shop_id": shop_id})
+        is_exp = bool(sub_doc and (sub_doc.get("is_expired") or sub_doc.get("status") == "expired"))
+        SHOP_SUB_CACHE[shop_id] = (is_exp, now + SUB_CACHE_TTL)
+        return is_exp
+    except Exception as e:
+        ic(f"Error checking subscription status: {e}")
+        return False
 
 
 async def auth_middleware(request: Request, call_next):
@@ -61,7 +83,7 @@ async def auth_middleware(request: Request, call_next):
         return await call_next(request)
 
     # Bypass authentication for health checks, auth routes, and employee verification routes
-    if path.startswith("/health") or path.startswith("/api/auth") or path.startswith("/api/employees/verify"):
+    if path.startswith("/health") or path.startswith("/api/auth") or "/verify" in path or "/internal/" in path:
         return await call_next(request)
 
     auth_header = request.headers.get("Authorization")
@@ -133,7 +155,7 @@ async def auth_middleware(request: Request, call_next):
     # 5. Service-based Route Access Control (Navigation Rules)
     service_name = payload.get("service_name")
     user_id = payload.get("sub")
-    x_shop_id = request.headers.get("x-shop-id")
+    x_shop_id = request.headers.get("x-shop-id") or request.query_params.get("shop_id")
     required_permission = get_required_permission(request.method, path)
     role = payload.get("role")
 
@@ -143,6 +165,25 @@ async def auth_middleware(request: Request, call_next):
         or service_name == "digitalstore"
         or request.headers.get("x-origin") == "digitalstore"
     )
+
+    # 5.1 SUBSCRIPTION EXPIRATION LOCKOUT (Hard backend check)
+    is_exempt_route = (
+        path.startswith("/health")
+        or path.startswith("/api/auth")
+        or "/subscriptions" in path
+        or "/shops" in path
+        or "/verify" in path
+        or "/internal/" in path
+    )
+
+    if not is_exempt_route and not is_digitalstore_route:
+        if await is_shop_subscription_expired(x_shop_id):
+            logger.warning(f"{RED}[SUBSCRIPTION LOCKED]{RESET} {CYAN}{request.method} {path}{RESET} | Shop: {x_shop_id} is EXPIRED. Request rejected.")
+            return create_error_response(
+                403,
+                "Subscription Expired",
+                "Your subscription has ended. All operations and data views for this workspace are locked until renewed."
+            )
 
     if not is_digitalstore_route and x_shop_id and user_id:
         cache_key = (x_shop_id, user_id)
