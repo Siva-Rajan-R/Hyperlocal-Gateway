@@ -51,7 +51,7 @@ SUB_CACHE_TTL = 10.0   # seconds
 
 # MongoDB Client for checking token revocation & subscription
 MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
-mongo_client = AsyncIOMotorClient(MONGODB_URL)
+mongo_client = AsyncIOMotorClient(MONGODB_URL, serverSelectionTimeoutMS=2000)
 db = mongo_client["AuthenticationServiceDb"]
 
 

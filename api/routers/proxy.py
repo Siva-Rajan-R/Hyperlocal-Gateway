@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Request, Response, WebSocket, WebSocketDisconnect
+from starlette.requests import ClientDisconnect
 import httpx
 import websockets
 import asyncio
@@ -71,24 +72,43 @@ async def websocket_proxy(websocket: WebSocket, service_path: str):
 )
 @limiter.limit("1000/minute")
 async def proxy(service_path: str, request: Request):
-    base_url = get_service_url(service_path=service_path)
+    try:
+        base_url = get_service_url(service_path=service_path)
+    except Exception as e:
+        return Response(status_code=404, content=f"Service Not Found: {str(e)}")
+
     url = f"{base_url}/{service_path}"
 
     excluded_headers = {"host", "content-length", "connection"}
-
     headers = {
         k: v for k, v in request.headers.items()
         if k.lower() not in excluded_headers
     }
 
+    try:
+        req_body = await request.body()
+    except ClientDisconnect:
+        logger.warning(f"Client disconnected before request body was received: {request.method} {request.url.path}")
+        return Response(status_code=499, content="Client Closed Request")
+
     client = get_http_client()
-    resp = await client.request(
-        method=request.method,
-        url=url,
-        headers=headers,
-        params=request.query_params,
-        content=await request.body()
-    )
+    try:
+        resp = await client.request(
+            method=request.method,
+            url=url,
+            headers=headers,
+            params=request.query_params,
+            content=req_body,
+        )
+    except httpx.ConnectTimeout:
+        logger.error(f"Connect timeout forwarding to {url}")
+        return Response(status_code=504, content="Gateway Timeout: Upstream connection timeout")
+    except httpx.ReadTimeout:
+        logger.error(f"Read timeout forwarding to {url}")
+        return Response(status_code=504, content="Gateway Timeout: Upstream read timeout")
+    except httpx.RequestError as e:
+        logger.error(f"Proxy request error forwarding to {url}: {e}")
+        return Response(status_code=502, content=f"Bad Gateway: Unable to reach upstream service ({e})")
 
     return Response(
         content=resp.content,
