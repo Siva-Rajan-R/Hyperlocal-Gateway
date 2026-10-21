@@ -59,6 +59,12 @@ async def is_shop_subscription_expired(shop_id: str) -> bool:
     mock_expired = (os.getenv("MOCK_SUBSCRIPTION_EXPIRED", "false").lower() in ("true", "1", "yes")) or (os.getenv("MOCK_TRIAL_EXPIRED", "false").lower() in ("true", "1", "yes"))
     if mock_expired:
         return True
+    
+    # Check subscription environment: in development, subscription is always unlocked and unlimited
+    sub_env = (os.getenv("SUBSCRIPTION_ENVIRONMENT") or os.getenv("ENVIRONMENT") or "development").strip().lower()
+    if sub_env in ("development", "dev"):
+        return False
+
     if not shop_id or shop_id == "string":
         return False
     now = time.time()
@@ -82,8 +88,8 @@ async def auth_middleware(request: Request, call_next):
     if request.method == "OPTIONS":
         return await call_next(request)
 
-    # Bypass authentication for health checks, auth routes, and employee verification routes
-    if path.startswith("/health") or path.startswith("/api/auth") or "/verify" in path or "/internal/" in path:
+    # Bypass authentication for health checks, auth routes, employee verification, and printer bridge routes
+    if path.startswith("/health") or path.startswith("/api/auth") or "/verify" in path or "/internal/" in path or "/shop-ui-ids" in path or "/printer" in path:
         return await call_next(request)
 
     auth_header = request.headers.get("Authorization")

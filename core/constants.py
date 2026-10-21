@@ -33,7 +33,7 @@ if IS_DOCKER:
     SHOPEMP_SERVICE_URL = os.getenv("SHOPEMP_SERVICE_URL", "http://shopemp-service:8000")
 else:
     SERVICES = {
-        'utilities': os.getenv('UTILITY_SERVICE_URL', 'http://127.0.0.1:8000'),
+        'utilities': os.getenv('UTILITY_SERVICE_URL', 'http://127.0.0.1:8012'),
         'shops': os.getenv('SHOPEMP_SERVICE_URL', 'http://127.0.0.1:8001'),
         'auth': os.getenv('AUTH_SERVICE_URL', 'http://127.0.0.1:8010'),
         'employees': os.getenv('SHOPEMP_SERVICE_URL', 'http://127.0.0.1:8001'),

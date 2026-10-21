@@ -5,6 +5,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from api.routers.proxy import router
+from api.routers.printer import router as printer_router
 from api.middlewares.auth import auth_middleware
 from api.middlewares.rate_limit import limiter, rate_limit_exceeded_handler
 from core.utils.http_client import get_http_client, close_http_client
@@ -37,6 +38,8 @@ app.add_middleware(SlowAPIMiddleware)
 app.middleware("http")(auth_middleware)
 
 # Routes
+app.include_router(printer_router, prefix="/api")
+app.include_router(printer_router)
 app.include_router(router, prefix="/api")
 
 @app.get("/health")
