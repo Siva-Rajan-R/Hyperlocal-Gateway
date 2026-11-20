@@ -24,12 +24,18 @@ async def websocket_proxy(websocket: WebSocket, service_path: str):
 
     ws_base_url = base_url.replace("https://", "wss://").replace("http://", "ws://")
     query_string = websocket.scope.get("query_string", b"").decode("utf-8")
-    target_url = f"{ws_base_url}/{service_path}"
+    target_url = f"{ws_base_url.rstrip('/')}/{service_path.lstrip('/')}"
     if query_string:
         target_url = f"{target_url}?{query_string}"
 
     try:
-        async with websockets.connect(target_url) as target_ws:
+        async with websockets.connect(
+            target_url,
+            ping_interval=20,
+            ping_timeout=20,
+            close_timeout=10,
+            max_size=10 * 1024 * 1024,
+        ) as target_ws:
             async def client_to_target():
                 try:
                     while True:

@@ -2,6 +2,7 @@
 # Note: The route prefix should be enough to match the base path
 ROUTE_PERMISSIONS = {
     # Supplier Routes
+    ("POST", "/api/suppliers/bulk-delete"): "delete_supplier",
     ("POST", "/api/suppliers/bulk"): "create_supplier",
     ("POST", "/api/suppliers"): "create_supplier",
     ("PUT", "/api/suppliers/outstanding"): "update_supplier",
@@ -10,6 +11,7 @@ ROUTE_PERMISSIONS = {
     ("GET", "/api/suppliers"): "read_supplier",
     
     # Inventory / Products Routes
+    ("POST", "/api/inventories/bulk-delete"): "delete_product",
     ("POST", "/api/inventories/bulk"): "create_product",
     ("POST", "/api/inventories"): "create_product",
     ("PUT", "/api/inventories"): "update_product",
@@ -23,6 +25,7 @@ ROUTE_PERMISSIONS = {
     ("GET", "/api/purchases"): "read_purchase",
 
     # Customers Routes
+    ("POST", "/api/customers/bulk-delete"): "delete_customer",
     ("POST", "/api/customers/bulk"): "create_customer",
     ("POST", "/api/customers"): "create_customer",
     ("PUT", "/api/customers"): "update_customer",
@@ -41,6 +44,7 @@ ROUTE_PERMISSIONS = {
     ("GET", "/api/orders"): "read_order",
 
     # Employee Routes
+    ("POST", "/api/employees/bulk-delete"): "delete_employee",
     ("POST", "/api/employees/bulk"): "create_employee",
     ("POST", "/api/employees"): "create_employee",
     ("PUT", "/api/employees"): "update_employee",
