@@ -11,6 +11,8 @@ ROUTE_PERMISSIONS = {
     ("GET", "/api/suppliers"): "read_supplier",
     
     # Inventory / Products Routes
+    ("POST", "/api/inventories/export"): "read_product",
+    ("GET", "/api/inventories/export"): "read_product",
     ("POST", "/api/inventories/bulk-delete"): "delete_product",
     ("POST", "/api/inventories/bulk"): "create_product",
     ("POST", "/api/inventories"): "create_product",
