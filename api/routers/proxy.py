@@ -90,6 +90,14 @@ async def proxy(service_path: str, request: Request):
         k: v for k, v in request.headers.items()
         if k.lower() not in excluded_headers
     }
+    if "x-forwarded-host" not in headers:
+        client_host = request.headers.get("host") or request.headers.get("x-forwarded-host")
+        if client_host:
+            headers["x-forwarded-host"] = client_host
+    if "x-forwarded-proto" not in headers:
+        headers["x-forwarded-proto"] = request.headers.get("x-forwarded-proto") or request.url.scheme
+    if "x-forwarded-prefix" not in headers:
+        headers["x-forwarded-prefix"] = "/api"
 
     try:
         req_body = await request.body()
